@@ -1,0 +1,17 @@
+{
+    "dependencies": {},
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^8.46.2",
+        "@typescript-eslint/parser": "^8.46.2",
+        "eslint": "^9.38.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.4",
+        "eslint-plugin-vue": "^10.5.1",
+        "prettier": "^3.6.2"
+    },
+    "scripts": {
+        "lint": "eslint 'packages/**/*.{ts,js,vue}' --fix",
+        "format": "prettier --write .",
+        "check:format": "prettier --check ."
+    }
+}
