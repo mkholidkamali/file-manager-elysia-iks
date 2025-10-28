@@ -1,0 +1,16 @@
+{
+  "name": "explorer-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/app.ts",
+    "build": "bun bunfig build",
+    "start": "node dist/index.js",
+    "migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "prisma": "^5.0.0"
+  }
+}
