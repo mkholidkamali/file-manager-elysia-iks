@@ -12,7 +12,7 @@
         "check:format": "prettier --check .",
         "prisma:generate": "bunx prisma generate",
         "prisma:migrate": "bunx prisma migrate dev",
-        "seed": "bunx prisma generate && bun prisma/seed.ts"
+        "prisma:seed": "bunx prisma generate && bun prisma/seed.ts"
     },
     "dependencies": {
         "dotenv": "^17.2.3"
