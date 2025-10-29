@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// Configuration
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Model Schema
+model Folder {
+  id         BigInt    @id @default(autoincrement())
+  name       String
+  parentId   BigInt?
+  path       String?
+  depth      Int       @default(0)
+  orderIndex Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAat DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  parent   Folder?  @relation("FolderChildren", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderChildren")
+  files    File[]
+
+  @@index([parentId, orderIndex])
+  @@index([path])
+  @@index([name])
+}
+
+model File {
+  id        BigInt    @id @default(autoincrement())
+  folderId  BigInt?
+  name      String
+  size      BigInt?
+  mimeType  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  folder Folder? @relation(fields: [folderId], references: [id])
+
+  @@index([folderId])
+  @@index([name])
+}

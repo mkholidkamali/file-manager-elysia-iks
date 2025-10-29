@@ -9,10 +9,16 @@
         "migrate": "prisma migrate dev",
         "lint": "eslint 'src/**/*.{js,ts,vue}' --fix",
         "format": "prettier --write .",
-        "check:format": "prettier --check ."
+        "check:format": "prettier --check .",
+        "prisma:generate": "bunx prisma generate",
+        "prisma:migrate": "bunx prisma migrate dev",
+        "seed": "bunx prisma generate && bun prisma/seed.ts"
     },
-    "dependencies": {},
+    "dependencies": {
+        "dotenv": "^17.2.3"
+    },
     "devDependencies": {
-        "prisma": "^5.0.0"
+        "@prisma/client": "^6.18.0",
+        "prisma": "^6.18.0"
     }
 }
