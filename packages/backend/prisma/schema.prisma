@@ -21,10 +21,10 @@ model Folder {
   name       String
   parentId   BigInt?
   path       String?
-  depth      Int       @default(0)
-  orderIndex Int       @default(0)
+  depth      Int?      @default(0)
+  orderIndex Int?      @default(0)
   createdAt  DateTime  @default(now())
-  updatedAat DateTime  @updatedAt
+  updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
   parent   Folder?  @relation("FolderChildren", fields: [parentId], references: [id])

@@ -33,7 +33,7 @@ async function createFolderWithPath(data: {
 		if (!parent) throw new Error("Parent folder not found");
 
 		path = `/${parent.id}/${folder.id}/`;
-		depth = parent.depth + 1;
+		depth = (parent?.depth ?? 0) + 1;
 	}
 
 	// Update depth
