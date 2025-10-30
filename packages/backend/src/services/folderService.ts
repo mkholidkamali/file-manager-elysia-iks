@@ -1,67 +1,99 @@
-// import prisma from "../utils/prisma";
 import { withTransaction } from "../utils/transaction";
-import * as repo from "../repositories/folderRepository";
+import { folderRepository } from "../repositories/folderRepository";
 import { toFolderDTO } from "../repositories/folderMapper";
 import type { FolderDTO } from "../types/folder";
+import type { IFolderRepository } from "../ports/IFolderRepository";
 
-export const getAllRoot = async (): Promise<FolderDTO[]> => {
-	let rows = await repo.getAllRoot();
-	return rows.map<FolderDTO>(toFolderDTO);
-}
+const typedFolderRepository: IFolderRepository = folderRepository;
 
-export const findChildren = async (parentId: number | null): Promise<FolderDTO[]> => {
-	let rows = await repo.findChildren(parentId);
-	return rows.map<FolderDTO>(toFolderDTO);
-}
+export class FolderService {
+	// Dependency injection
+	constructor(private readonly folderRepo: IFolderRepository) { }
 
-export const createFolderWithPath = withTransaction(async (tx, name: string, parentId?: number | null) => {
-	// Create folder
-	const folder = await repo.createFolder(tx, { name, parentId: parentId ?? null });
-
-	// Serch parent
-	let path = `/${folder.id}/`;
-	let depth = 0;
-	if (parentId) {
-		const parent = await repo.findById(parentId);
-		if (!parent) throw new Error('Parent folder not found');
-		path = `/${parent.id}/${folder.id}/`;
-		depth = (parent?.depth ?? 0) + 1;
+	async getAllRoot(): Promise<FolderDTO[]> {
+		const rows = await this.folderRepo.getAllRoot();
+		return rows.map<FolderDTO>(toFolderDTO);
 	}
 
-	// Update folder
-	await repo.updateFolder(tx, folder.id, { path, depth });
+	async findChildren(parentId: number | null): Promise<FolderDTO[]> {
+		const rows = await this.folderRepo.findChildren(parentId);
+		return rows.map<FolderDTO>(toFolderDTO);
+	}
 
-	// Return full folder
-	return toFolderDTO({ ...folder, path, depth }); // Wrap it good with http response
-})
+	createFolderWithPath = withTransaction(async (tx, name: string, parentId?: number | null) => {
+		// Determine path and depth based on parent
+		let path = "/";
+		let depth = 0;
 
-export const moveFolder = withTransaction(async (tx, folderId: bigint, newParentId: bigint | null) => {
-	// Find current folder
-	const folder = await repo.findById(Number(folderId));
-	if (!folder) throw new Error('Folder not found');
+		if (parentId) {
+			const parent = await this.folderRepo.findById(parentId);
+			if (!parent) throw new Error('Parent folder not found');
+			path = parent.path || "/";
+			depth = (parent.depth ?? 0) + 1;
+		}
 
-	// Create new parent
-	const newParentFolder = newParentId ? await repo.findById(Number(newParentId)) : null;
+		// Create folder with initial path
+		const folder = await this.folderRepo.createFolder(tx, {
+			name,
+			parentId: parentId ?? null,
+			path
+		});
 
-	// Prevent moving into its own subtree
-	if (newParentFolder && newParentFolder.path?.startsWith(folder.path ?? '-')) throw new Error('Invalid move : Target parent are descendant of folder');
+		// Update path to include the new folder's ID
+		const updatedPath = `${path}${folder.id}/`;
 
-	// Prepare path and depth
-	const oldPath  = folder.path?.replace(/\/+$/, '/') ?? '';
-	const oldDepth = folder?.depth ?? 0;
-	const newPath  = ((newParentFolder?.path ?? '/') + folder.id + '/').replace(/\/+$/, '/');
-	const newDepth = newParentFolder ? ((newParentFolder?.depth ?? 0) + 1) : 0;
-	const depthSum = newDepth - oldDepth;
+		// Update folder with correct path
+		await this.folderRepo.updateFolder(tx, folder.id, {
+			path: updatedPath,
+			depth
+		});
 
-	// Update current folder
-	await repo.updateFolder(tx, folderId, { 
-		parentId: newParentId ?? null, 
-		path: newPath, 
-		depth: newDepth 
+		// Return full folder
+		return toFolderDTO({ ...folder, path: updatedPath, depth });
 	});
 
-	// Update all descendants from current folder : path and depth
-	await repo.updateDescendantsPathRaw(tx, oldPath, newPath, depthSum);
+	moveFolder = withTransaction(async (tx, folderId: number | bigint, newParentId: number | bigint | null) => {
+		// Find current folder
+		const folder = await this.folderRepo.findById(folderId);
+		if (!folder) throw new Error('Folder not found');
 
-	return { moved: true, folderId: folderId?.toString(), newParentId: newParentId?.toString() }
-})
+		// Get new parent if specified
+		const newParentFolder = newParentId ? await this.folderRepo.findById(newParentId) : null;
+
+		// Prevent moving into its own subtree
+		if (newParentFolder && newParentFolder.path?.startsWith(folder.path ?? '-')) {
+			throw new Error('Invalid move: Target parent is a descendant of folder');
+		}
+
+		// Prepare path and depth
+		const oldPath = folder.path?.replace(/\/+$/, '/') ?? '';
+		const oldDepth = folder?.depth ?? 0;
+		const newPath = ((newParentFolder?.path ?? '/') + folder.id + '/').replace(/\/+$/, '/');
+		const newDepth = newParentFolder ? ((newParentFolder?.depth ?? 0) + 1) : 0;
+
+		// Update current folder
+		await this.folderRepo.updateFolder(tx, folderId, {
+			parentId: newParentId ?? null,
+			path: newPath,
+			depth: newDepth
+		});
+
+		// Update all descendants from current folder: path and depth
+		await this.folderRepo.updateDescendantsPathRaw(tx, oldPath, newPath);
+
+		return {
+			moved: true,
+			folderId: folderId.toString(),
+			newParentId: newParentId?.toString()
+		};
+	});
+}
+
+// Create singleton instance with the repository implementation
+const folderService = new FolderService(typedFolderRepository);
+
+// Export methods for backward compatibility
+export const getAllRoot = folderService.getAllRoot.bind(folderService);
+export const findChildren = folderService.findChildren.bind(folderService);
+export const createFolderWithPath = folderService.createFolderWithPath.bind(folderService);
+export const moveFolder = folderService.moveFolder.bind(folderService);
