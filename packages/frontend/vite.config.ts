@@ -11,6 +11,14 @@ export default defineConfig({
         },
     },
     server: {
-        port: 3000,
+        port: 3001,
+        fs: {
+            // Allow serving files from one level up to the project root
+            allow: ['..'],
+        },
+    },
+    build: {
+        // Improve source maps for better debugging
+        sourcemap: true,
     },
 });

@@ -11,10 +11,10 @@
           <i class="pi pi-search search-icon"></i>
           <input type="text" placeholder="Search" class="search-input" />
         </div>
-        <Button icon="pi pi-plus" class="p-button-rounded add-button" @click="showAddDialog = true" />
+        <Button icon="pi pi-plus" class="p-button-rounded add-button" @click="openAddDialog" />
       </div>
       
-      <!-- Add new item dialog -->
+      <!-- eslint-disable-next-line vue/no-v-model-argument -->
       <Dialog v-model:visible="showAddDialog" header="Add New Item" :modal="true" class="add-dialog">
         <div class="add-dialog-content">
           <div class="form-group">
@@ -36,8 +36,16 @@
     <div class="finder-container">
       <!-- Main content area with panels -->
       <div class="content-area">
+        <!-- Error message when API is unavailable -->
+        <div v-if="apiError" class="api-error-container">
+          <i class="pi pi-exclamation-triangle error-icon"></i>
+          <h3>Connection Error</h3>
+          <p>Unable to connect to the file server. Please check your connection and try again.</p>
+          <Button label="Retry" icon="pi pi-refresh" @click="retryConnection" />
+        </div>
+        
         <!-- Panels container -->
-        <div class="panels-container">
+        <div v-else class="panels-container">
           <!-- Each panel represents a folder level -->
           <div 
             v-for="panel in activePanels" 
@@ -145,12 +153,15 @@ function formatDate(dateString: string): string {
 interface Panel {
   id: string;
   path: string;
+  name?: string;
   files: FileItem[];
   selectedFile: FileItem | null;
 }
 
 const fileStore = useFileStore();
 const navigationHistory = ref<string[]>(['/']);
+const currentPath = ref('/');
+const apiError = ref(false);
 
 // Add dialog state
 const showAddDialog = ref(false);
@@ -160,154 +171,86 @@ const itemTypes = [
   { name: 'Folder', value: 'folder' },
   { name: 'File', value: 'file' }
 ];
+
+// Debug log for dialog visibility
+watch(showAddDialog, (newVal) => {
+  console.log('Dialog visibility changed:', newVal);
+});
 const currentHistoryIndex = ref(0);
 const activePanels = ref<Panel[]>([]);
 const selectedFile = ref<FileItem | null>(null);
 
-// Mock files for development
-const mockFilesData: FileItem[] = [
-  {
-    id: '1',
-    name: 'Aplikasi-Pe...u-Tidur.pptx',
-    type: 'pptx',
-    size: 2500000,
-    lastModified: new Date().toISOString(),
-    path: '/Aplikasi-Pe...u-Tidur.pptx',
-    parentPath: '/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  {
-    id: '2',
-    name: 'Arduino',
-    type: 'folder',
-    size: 0,
-    lastModified: new Date().toISOString(),
-    path: '/Arduino/',
-    parentPath: '/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  {
-    id: '3',
-    name: 'Database',
-    type: 'folder',
-    size: 0,
-    lastModified: new Date().toISOString(),
-    path: '/Database/',
-    parentPath: '/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  {
-    id: '4',
-    name: 'Dump',
-    type: 'folder',
-    size: 0,
-    lastModified: new Date().toISOString(),
-    path: '/Dump/',
-    parentPath: '/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  {
-    id: '5',
-    name: 'org.safeexa...-30-473.log',
-    type: 'log',
-    size: 1200000,
-    lastModified: new Date().toISOString(),
-    path: '/org.safeexa...-30-473.log',
-    parentPath: '/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  // Arduino folder contents
-  {
-    id: '6',
-    name: 'Project1',
-    type: 'folder',
-    size: 0,
-    lastModified: new Date().toISOString(),
-    path: '/Arduino/Project1/',
-    parentPath: '/Arduino/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  {
-    id: '7',
-    name: 'sketch.ino',
-    type: 'ino',
-    size: 5000,
-    lastModified: new Date().toISOString(),
-    path: '/Arduino/sketch.ino',
-    parentPath: '/Arduino/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
-  },
-  // Database folder contents
-  {
-    id: '8',
-    name: 'users.db',
-    type: 'db',
-    size: 1500000,
-    lastModified: new Date().toISOString(),
-    path: '/Database/users.db',
-    parentPath: '/Database/',
-    expanded: false,
-    children: [],
-    parent: null,
-    cloudStatus: 'synced'
+// Initialize with real data from backend
+const isLoading = ref(true);
+
+// Function to add a new panel
+const addPanel = (path: string, name?: string) => {
+  const files = getFilesForPath(path);
+  activePanels.value.push({
+    id: `panel-${activePanels.value.length}`,
+    path,
+    name: name || (path === '/' ? 'Root' : path.split('/').filter(Boolean).pop()),
+    files,
+    selectedFile: null
+  });
+};
+
+// Function to open add dialog
+function openAddDialog() {
+  showAddDialog.value = true;
+  newItemName.value = '';
+  newItemType.value = 'folder';
+  console.log('Opening add dialog');
+}
+
+// Function to retry connection
+async function retryConnection() {
+  try {
+    isLoading.value = true;
+    apiError.value = false;
+    await fileStore.initializeExplorer();
+    addPanel('/');
+    currentPath.value = '/';
+  } catch (error) {
+    console.error('Failed to initialize explorer:', error);
+    apiError.value = true;
+  } finally {
+    isLoading.value = false;
   }
-];
+}
 
-const mockFiles = ref<FileItem[]>(mockFilesData);
-
-
+// Initialize the explorer with data from the backend
+onMounted(async () => {
+  try {
+    isLoading.value = true;
+    await fileStore.initializeExplorer();
+    // Initialize the first panel with root files
+    addPanel('/');
+    // Set current path to root
+    currentPath.value = '/';
+  } catch (error) {
+    console.error('Failed to initialize explorer:', error);
+    apiError.value = true;
+  } finally {
+    isLoading.value = false;
+  }
+});
 
 // Computed properties for panel titles
 function getPanelTitle(panel: Panel) {
-  const pathParts = panel.path.split('/').filter(Boolean);
-  return pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'Root';
+  // Use name instead of path for the panel title
+  return panel.name || 'Root';
 }
-
 
 // Get files for a specific path
 const getFilesForPath = (path: string): FileItem[] => {
-  return mockFiles.value.filter(file => file.parentPath === path);
+  return fileStore.files.filter((file: FileItem) => file.parentPath === path);
 };
 
-// Initialize the first panel with root files
-onMounted(() => {
-  // Initialize with root panel
-  activePanels.value = [
-    {
-      id: 'root-panel',
-      path: '/',
-      files: getFilesForPath('/'),
-      selectedFile: null
-    }
-  ];
-  
-  // Set initial path
-  fileStore.currentPath = '/';
-});
+// This is now handled in the main onMounted hook
 
 // Handle item click in a panel
-function handleItemClick(file: FileItem, panel: Panel) {
+async function handleItemClick(file: FileItem, panel: Panel) {
   // Update selected file in the panel
   panel.selectedFile = file;
   
@@ -324,16 +267,32 @@ function handleItemClick(file: FileItem, panel: Panel) {
       activePanels.value = activePanels.value.slice(0, panelIndex + 1);
     }
     
-    // Add a new panel for the folder
-    activePanels.value.push({
-      id: `panel-${file.id}`,
-      path: file.path,
-      files: getFilesForPath(file.path),
-      selectedFile: null
-    });
+    // Extract folder ID from path
+    const folderId = parseInt(file.id);
+    console.log('Fetching contents for folder ID:', folderId);
+    
+    // Fetch the folder contents from the database
+    try {
+      isLoading.value = true;
+      await fileStore.fetchFilesAndFolders(folderId);
+      
+      // Add a new panel for the folder with fresh data
+      activePanels.value.push({
+        id: `panel-${file.id}`,
+        path: file.path,
+        name: file.name,
+        files: getFilesForPath(file.path),
+        selectedFile: null
+      });
+    } catch (error) {
+      console.error('Error fetching folder contents:', error);
+      alert('Failed to load folder contents. Please try again.');
+    } finally {
+      isLoading.value = false;
+    }
     
     // Update current path
-    fileStore.currentPath = file.path;
+    currentPath.value = file.path;
     
     // Add to navigation history
     if (navigationHistory.value[currentHistoryIndex.value] !== file.path) {
@@ -362,6 +321,7 @@ function navigateToFolder(path: string) {
   panels.push({
     id: 'root-panel',
     path: '/',
+    name: 'Root',
     files: getFilesForPath('/'),
     selectedFile: null
   });
@@ -369,10 +329,17 @@ function navigateToFolder(path: string) {
   // Build the path hierarchy
   let currentPath = '/';
   for (let i = 0; i < pathParts.length; i++) {
-    currentPath += pathParts[i] + '/';
+    const folderName = pathParts[i];
+    currentPath += folderName + '/';
+    
+    // Find the folder item to get its name
+    const folderItems = getFilesForPath(currentPath.substring(0, currentPath.lastIndexOf(folderName)));
+    const folderItem = folderItems.find(item => item.name === folderName);
+    
     panels.push({
       id: `panel-${Date.now()}-${i}`,
       path: currentPath,
+      name: folderItem ? folderItem.name : folderName,
       files: getFilesForPath(currentPath),
       selectedFile: null
     });
@@ -470,72 +437,49 @@ function getFileIcon(file: FileItem) {
 
 
 // File/Folder Creation
-function addNewItem() {
-  const currentPath = fileStore.currentPath;
-  
+async function addNewItem() {
   if (!newItemName.value || newItemName.value.trim() === '') {
     alert('Please enter a valid name');
     return;
   }
   
-  // Check for duplicate names
-  const existingItem = mockFiles.value.find(
-    item => item.parentPath === currentPath && item.name === newItemName.value.trim()
-  );
+  // Extract folderId from the current path
+  const pathParts = currentPath.value.split('/').filter(Boolean);
+  const folderId = pathParts.length > 0 ? parseInt(pathParts[0]) : null;
+  console.log('Creating new item in folder:', folderId);
   
-  if (existingItem) {
-    alert('An item with this name already exists in this location');
-    return;
+  try {
+    let newItem;
+    
+    if (newItemType.value === 'folder') {
+      // Create new folder using API
+      newItem = await fileStore.createFolder(newItemName.value.trim(), folderId);
+    } else {
+      // Create new file using API
+      const mimeType = newItemName.value.includes('.') ? 
+        `application/${newItemName.value.split('.').pop()}` : 'text/plain';
+      
+      newItem = await fileStore.createFile(newItemName.value.trim(), 0, mimeType, folderId);
+    }
+    
+    // Add the new item directly to the current panel
+    if (newItem) {
+      // Find the current panel
+      const currentPanel = activePanels.value[activePanels.value.length - 1];
+      if (currentPanel) {
+        // Add the new item to the panel's files
+        currentPanel.files.push(newItem);
+      }
+    }
+    
+    // Reset form and close dialog
+    newItemName.value = '';
+    newItemType.value = 'folder';
+    showAddDialog.value = false;
+  } catch (error) {
+    console.error('Error creating item:', error);
+    alert('Failed to create item. Please try again.');
   }
-  
-  if (newItemType.value === 'folder') {
-    // Create new folder
-    const newFolder: FileItem = {
-      id: `folder-${Date.now()}`,
-      name: newItemName.value.trim(),
-      type: 'folder',
-      size: 0,
-      lastModified: new Date().toISOString(),
-      path: `${currentPath}${newItemName.value.trim()}/`,
-      parentPath: currentPath,
-      expanded: false,
-      children: [],
-      parent: null,
-      cloudStatus: 'synced'
-    };
-    
-    // Add to mock files
-    mockFiles.value.push(newFolder);
-  } else {
-    // Create new file
-    const extension = newItemName.value.includes('.') ? 
-      newItemName.value.split('.').pop() || 'txt' : 'txt';
-    
-    const newFile: FileItem = {
-      id: `file-${Date.now()}`,
-      name: newItemName.value.trim(),
-      type: extension,
-      size: 0,
-      lastModified: new Date().toISOString(),
-      path: `${currentPath}${newItemName.value.trim()}`,
-      parentPath: currentPath,
-      expanded: false,
-      children: [],
-      parent: null,
-      cloudStatus: 'synced'
-    };
-    
-    // Add to mock files
-    mockFiles.value.push(newFile);
-  }
-  
-  // Reset form and close dialog
-  newItemName.value = '';
-  newItemType.value = 'folder';
-  showAddDialog.value = false;
-  
-  // Refresh the current panel
-  refreshCurrentPanel();
 }
 
 
@@ -558,7 +502,7 @@ function handleDragStart(event: DragEvent, file: FileItem) {
 function handleDrop(event: DragEvent, targetFile: FileItem, panel: Panel) {
   if (event.dataTransfer) {
     const sourceFileId = event.dataTransfer.getData('text/plain');
-    const sourceFile = mockFiles.value.find(file => file.id === sourceFileId);
+    const sourceFile = fileStore.files.find((file: FileItem) => file.id === sourceFileId);
     
     // Remove dragging class from all elements
     document.querySelectorAll('.dragging').forEach(el => {
@@ -610,7 +554,7 @@ function addPanelDropListeners() {
       const dragEvent = event as DragEventWithDataTransfer;
       if (dragEvent.dataTransfer) {
         const sourceFileId = dragEvent.dataTransfer.getData('text/plain');
-        const sourceFile = mockFiles.value.find(file => file.id === sourceFileId);
+        const sourceFile = fileStore.files.find((file: FileItem) => file.id === sourceFileId);
         
         if (sourceFile && index < activePanels.value.length) {
           const targetPath = activePanels.value[index].path;
@@ -645,47 +589,34 @@ watch(activePanels, () => {
   }, 100);
 });
 
-function moveItem(file: FileItem, targetFolderPath: string) {
-  // Find the file in mockFiles
-  const fileIndex = mockFiles.value.findIndex(f => f.id === file.id);
-  if (fileIndex !== -1) {
-    const oldPath = file.path;
-    const isFolder = file.type === 'folder';
+async function moveItem(file: FileItem, targetFolderPath: string) {
+  try {
+    // Extract folderId from the target path
+    const pathParts = targetFolderPath.split('/').filter(Boolean);
+    const targetFolderId = pathParts.length > 0 ? parseInt(pathParts[0]) : null;
     
-    // Update the file's parent path
-    mockFiles.value[fileIndex].parentPath = targetFolderPath;
-    
-    // Update the file's path
-    if (isFolder) {
-      mockFiles.value[fileIndex].path = `${targetFolderPath}${file.name}/`;
+    // Call the API to move the folder
+    if (file.type === 'folder') {
+      await fileStore.moveFolder(parseInt(file.id), targetFolderId);
     } else {
-      mockFiles.value[fileIndex].path = `${targetFolderPath}${file.name}`;
-    }
-    
-    // If it's a folder, update all child items' paths
-    if (isFolder) {
-      mockFiles.value.forEach(item => {
-        if (item.path.startsWith(oldPath) && item.id !== file.id) {
-          item.path = item.path.replace(oldPath, mockFiles.value[fileIndex].path);
-          if (item.parentPath) {
-            item.parentPath = item.parentPath.replace(oldPath, mockFiles.value[fileIndex].path);
-          }
-        }
-      });
+      // For files, we would need a moveFile API method
+      // This will be implemented in future updates
+      console.log('Moving files not yet implemented');
     }
     
     // Refresh all panels to reflect the changes
+    await refreshCurrentPanel();
     refreshAllPanels();
+  } catch (error) {
+    console.error('Error moving item:', error);
+    alert('Failed to move item. Please try again.');
   }
 }
 
 // Helper function to refresh the current panel
-function refreshCurrentPanel() {
-  // Find the last panel (current folder)
-  if (activePanels.value.length > 0) {
-    const currentPanel = activePanels.value[activePanels.value.length - 1];
-    currentPanel.files = getFilesForPath(currentPanel.path);
-  }
+async function refreshCurrentPanel() {
+  // Fetch updated data from the server
+  await fileStore.refreshPanels();
 }
 
 // Helper function to refresh all panels
@@ -697,15 +628,19 @@ function refreshAllPanels() {
 
 // File selection handling is managed elsewhere
 
-// Initialize
-onMounted(() => {
-  fileStore.setCurrentPath('');
-  fileStore.fetchFiles();
-  
-  // Setup panel drop listeners for drag and drop between panels
-  setTimeout(() => {
-    addPanelDropListeners();
-  }, 500);
+// Setup panel drop listeners for drag and drop between panels
+onMounted(async () => {
+  try {
+    // Initialize the explorer with data from the backend is already handled in another onMounted hook
+    
+    // Add drop listeners to panels
+    setTimeout(() => {
+      addPanelDropListeners();
+    }, 500);
+  } catch (error) {
+    console.error('Error initializing explorer:', error);
+    apiError.value = true;
+  }
 });
 </script>
 
@@ -730,6 +665,23 @@ onMounted(() => {
 .panel-content.drop-target {
   background-color: rgba(0, 123, 255, 0.1);
   border: 2px dashed #007bff;
+}
+
+/* API Error styles */
+.api-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 3rem;
+  color: #dc3545;
+  margin-bottom: 1rem;
 }
 
 .list-item[draggable="true"] {
