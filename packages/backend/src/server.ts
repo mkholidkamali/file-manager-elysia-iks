@@ -5,7 +5,7 @@ import prisma from './utils/prisma'
 
 // Listen
 (async () => {
-	const port = process.env.PORT ? Number(process.env.PORT) : 3000
+	const port = process.env.PORT ? Number(process.env.PORT) : 3010
 
 	try {
 		app.listen(port);
