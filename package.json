@@ -12,6 +12,11 @@
     "scripts": {
         "lint": "eslint 'packages/**/*.{ts,js,vue}' --fix",
         "format": "prettier --write .",
-        "check:format": "prettier --check ."
+        "check:format": "prettier --check .",
+        "docker:up": "docker-compose up",
+        "docker:down": "docker-compose down",
+        "docker:build": "docker-compose build",
+        "docker:restart": "docker-compose restart",
+        "docker:logs": "docker-compose logs -f"
     }
 }

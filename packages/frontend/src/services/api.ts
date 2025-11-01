@@ -2,10 +2,10 @@
 // API service for communicating with the backend
 // Using real API to connect to the backend
 const USE_MOCK_DATA = false; // Set to false to use real backend data
-const API_BASE_URL = 'http://localhost:3010'; // Backend API URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010'; // Backend API URL from .env
 
 // Prevent direct script loading
-if (import.meta.url === document.currentScript?.src) {
+if (import.meta.url === (document.currentScript as HTMLScriptElement)?.src) {
   console.error('This file should not be loaded directly in the browser');
 }
 

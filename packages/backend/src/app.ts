@@ -9,7 +9,7 @@ export const app = new Elysia()
 	.get('/', () => 'Hello there!')
 	.use(swagger())
 	.use(cors({
-		origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
+		origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3010'],
 		methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 		credentials: true
 	}))

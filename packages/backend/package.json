@@ -11,6 +11,7 @@
         "format": "prettier --write .",
         "check:format": "prettier --check .",
         "prisma:generate": "bunx prisma generate",
+        "prisma:init": "bunx prisma generate && bunx prisma migrate dev && bun prisma/seed.ts",
         "prisma:migrate": "bunx prisma generate && bunx prisma migrate dev",
         "prisma:seed": "bunx prisma generate && bun prisma/seed.ts",
         "prisma:fresh": "bunx prisma migrate reset --force && bunx prisma generate && bunx prisma migrate dev && bun prisma/seed.ts",
